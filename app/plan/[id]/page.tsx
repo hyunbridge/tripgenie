@@ -20,7 +20,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { useSearchParams, useParams } from "next/navigation"
+import { useSearchParams, useParams, useRouter } from "next/navigation"
 import { getTravelPlan, updateItineraryWithId } from "@/app/actions/travel"
 import { useToast } from "@/hooks/use-toast"
 import { TravelPlanUI } from "@/lib/supabase"
@@ -35,6 +35,7 @@ function TravelPlanContent() {
   const [travelPlan, setTravelPlan] = useState<TravelPlanUI | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
+  const router = useRouter()
 
   const fetchTravelPlan = useCallback(async () => {
     console.log("[PlanPage] fetchTravelPlan called for planId:", planId);
@@ -62,34 +63,29 @@ function TravelPlanContent() {
   }, [fetchTravelPlan])
 
   const handleFeedback = async () => {
-    console.log("[PlanPage] handleFeedback called");
+    console.log("[PlanPage] handleFeedback called for planId:", planId);
     if (!feedback.trim() || !planId) {
       toast({
         title: "피드백을 입력해주세요",
         description: "여행 계획에 대한 피드백을 입력해주세요.",
         variant: "destructive",
-      })
-      return
+      });
+      return;
     }
 
     startTransition(async () => {
       try {
-        const result = await updateItineraryWithId(planId, feedback)
-        if (result.success && result.itinerary) {
-          setTravelPlan(prevPlan => {
-            if (!prevPlan) return null
-            return {
-              ...prevPlan,
-              itinerary: result.itinerary
-            }
-          })
-          setFeedback("")
+        const result = await updateItineraryWithId(planId, feedback);
+        
+        if (result.success && result.newPlanId) { 
           toast({
             title: "여행 계획이 수정되었습니다",
-            description: "피드백을 반영하여 계획을 업데이트했습니다.",
-          })
+            description: "피드백을 반영하여 새로운 계획을 생성했습니다.",
+          });
+          router.push(`/plan/${result.newPlanId}`); 
         } else {
-          throw new Error(result.error || "계획 업데이트 실패")
+          setFeedback("");
+          throw new Error(result.error || "새로운 여행 계획 생성에 실패했습니다.");
         }
       } catch (error) {
         toast({

@@ -114,35 +114,47 @@ export async function getTravelPlan(id: string): Promise<TravelPlanUI> {
 export async function updateItineraryWithId(planId: string, feedback: string) {
   try {
     // 기존 여행 계획 조회
-    const plan = await getTravelPlanById(planId)
+    const plan = await getTravelPlanById(planId); // plan의 타입은 TravelPlan (DB 스키마)
     if (!plan) {
-      throw new Error("여행 계획을 찾을 수 없습니다.")
+      throw new Error("여행 계획을 찾을 수 없습니다.");
     }
 
     // 피드백을 반영한 새로운 여행 계획 생성
-    const updatedItinerary = await updateItineraryWithFeedback(plan.itinerary, feedback)
+    const updatedItinerary = await updateItineraryWithFeedback(plan.itinerary, feedback);
+    
+    // 디버깅을 위해 DB에서 가져온 plan의 날짜 값을 로그로 남깁니다.
+    console.log('[updateItineraryWithId] Original plan fetched from DB:', { 
+      id: plan.id,
+      original_start_date: plan.start_date, 
+      original_end_date: plan.end_date 
+    });
 
-    // Supabase에 업데이트
-    // saveTravelPlan 호출 시 id, startDate, endDate, imageUrl을 명시적으로 전달합니다.
-    const { data, error } = await saveTravelPlan({
-      id: planId, 
+    const newPlanId = uuidv4(); // 새로운 여행 계획 ID 생성
+
+    const payloadForSave = {
+      id: newPlanId, // 새로운 ID 사용
       destination: plan.destination,
-      startDate: plan.startDate, 
-      endDate: plan.endDate, 
+      startDate: plan.start_date, 
+      endDate: plan.end_date,     
       preferences: plan.preferences,
-      itinerary: updatedItinerary,
-      imageUrl: plan.image_url, // 기존 이미지 URL 유지
-      user_id: plan.user_id 
-    })
+      itinerary: updatedItinerary, // 수정된 일정
+      imageUrl: plan.image_url, 
+      user_id: plan.user_id,
+      searchId: plan.search_id, 
+      // created_at, updated_at은 DB에서 자동 관리되거나 saveTravelPlan에서 처리
+    };
 
-    if (error) {
-      // console.error('Error saving travel plan in updateItineraryWithId:', error); // 상세 에러 로깅 추가
-      throw new Error("여행 계획 업데이트 중 오류가 발생했습니다.")
-    }
+    // 디버깅을 위해 saveTravelPlan에 전달할 payload를 로그로 남깁니다.
+    console.log('[updateItineraryWithId] Payload for new (forked) saveTravelPlan:', payloadForSave);
 
-    return { success: true, itinerary: updatedItinerary }
+    // Supabase에 새로운 여행 계획으로 저장 (insert)
+    await saveTravelPlan(payloadForSave); // saveTravelPlan은 내부적으로 insert를 수행
+
+    // 성공 시, 이전에는 itinerary를 반환했지만 이제 새로운 planId를 반환합니다.
+    return { success: true, newPlanId: newPlanId }; 
+
   } catch (error) {
-    console.error("Error in updateItineraryWithId:", error)
+    console.error("Error in updateItineraryWithId (forking process):", error);
     // 사용자가 볼 수 있도록 좀 더 구체적인 에러 메시지를 반환하거나, 여기서 바로 redirect를 하지는 않습니다.
     // 상위 컴포넌트에서 이 에러를 잡아서 처리하도록 합니다.
     // 만약 여기서 바로 redirect를 해야 한다면, Next.js의 에러 바운더리나 다른 방식으로 처리하는 것이 좋습니다.
