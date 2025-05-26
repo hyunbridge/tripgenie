@@ -1,63 +1,69 @@
 "use client"
 
-import { Suspense } from "react"
+import { Suspense, useCallback, useState, useTransition, useEffect } from "react"
 import Image from "next/image"
 import Link from "next/link"
 import {
   ArrowLeft,
   Calendar,
-  Download,
   Printer,
   Share2,
-  ThumbsUp,
-  MessageSquare,
   Loader2,
   Sparkles,
+  Search,
+  MessageSquare,
+  ThumbsUp,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import { Separator } from "@/components/ui/separator"
 import { Badge } from "@/components/ui/badge"
-import { useSearchParams } from "next/navigation"
-import { updateItinerary } from "@/app/actions/travel"
-import { useState, useTransition, useEffect } from "react"
+import { Separator } from "@/components/ui/separator"
+import { useSearchParams, useParams } from "next/navigation"
+import { getTravelPlan, updateItineraryWithId } from "@/app/actions/travel"
 import { useToast } from "@/hooks/use-toast"
+import { TravelPlanUI } from "@/lib/supabase"
+import TravelPlanLoading from "./loading"
 
 function TravelPlanContent() {
+  const params = useParams<{ id: string }>()
+  const planId = params.id
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
   const [feedback, setFeedback] = useState("")
-  const [currentItinerary, setCurrentItinerary] = useState<any>(null)
+  const [travelPlan, setTravelPlan] = useState<TravelPlanUI | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
 
-  const destination = searchParams.get("destination") || ""
-  const country = searchParams.get("country") || ""
-  const startDate = searchParams.get("startDate") || ""
-  const endDate = searchParams.get("endDate") || ""
-  const travelType = searchParams.get("travelType") || ""
-  const interests = searchParams.get("interests") || ""
-  const itineraryParam = searchParams.get("itinerary")
+  const fetchTravelPlan = useCallback(async () => {
+    console.log("[PlanPage] fetchTravelPlan called for planId:", planId);
+    if (!planId) return
 
-  let travelPlan = null
-  try {
-    if (itineraryParam) {
-      travelPlan = JSON.parse(itineraryParam)
+    try {
+      setIsLoading(true)
+      const plan = await getTravelPlan(planId)
+      console.log("[PlanPage] Fetched travel plan data:", plan);
+      setTravelPlan(plan)
+    } catch (error) {
+      console.error("[PlanPage] Error fetching travel plan:", error)
+      toast({
+        title: "여행 계획을 불러올 수 없습니다",
+        description: "잠시 후 다시 시도해주세요.",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
-  } catch (error) {
-    console.error("Error parsing itinerary:", error)
-  }
+  }, [planId, toast])
 
-  // useEffect를 사용하여 초기 상태 설정
   useEffect(() => {
-    if (travelPlan && !currentItinerary) {
-      setCurrentItinerary(travelPlan)
-    }
-  }, [travelPlan, currentItinerary])
+    fetchTravelPlan()
+  }, [fetchTravelPlan])
 
   const handleFeedback = async () => {
-    if (!feedback.trim()) {
+    console.log("[PlanPage] handleFeedback called");
+    if (!feedback.trim() || !planId) {
       toast({
         title: "피드백을 입력해주세요",
         description: "여행 계획에 대한 피드백을 입력해주세요.",
@@ -68,62 +74,112 @@ function TravelPlanContent() {
 
     startTransition(async () => {
       try {
-        const result = await updateItinerary(currentItinerary, feedback)
-        if (result.success) {
-          setCurrentItinerary(result.itinerary)
+        const result = await updateItineraryWithId(planId, feedback)
+        if (result.success && result.itinerary) {
+          setTravelPlan(prevPlan => {
+            if (!prevPlan) return null
+            return {
+              ...prevPlan,
+              itinerary: result.itinerary
+            }
+          })
           setFeedback("")
           toast({
             title: "여행 계획이 수정되었습니다",
             description: "피드백을 반영하여 계획을 업데이트했습니다.",
           })
         } else {
-          throw new Error(result.error)
+          throw new Error(result.error || "계획 업데이트 실패")
         }
       } catch (error) {
         toast({
           title: "오류 발생",
-          description: "여행 계획 수정 중 오류가 발생했습니다. 다시 시도해주세요.",
+          description: error instanceof Error ? error.message : "여행 계획 수정 중 오류가 발생했습니다. 다시 시도해주세요.",
           variant: "destructive",
         })
       }
     })
   }
 
-  if (!travelPlan) {
+  const handlePrint = () => {
+    console.log("[PlanPage] handlePrint called");
+    window.print();
+  };
+
+  const handleShare = async () => {
+    console.log("[PlanPage] handleShare called");
+    try {
+      const shareUrl = window.location.href;
+      await navigator.clipboard.writeText(shareUrl);
+      toast({
+        title: "링크가 복사되었습니다",
+        description: "이 링크를 공유하여 여행 계획을 공유할 수 있습니다.",
+      });
+    } catch (error) {
+      console.error("[PlanPage] Error copying to clipboard:", error);
+      toast({
+        title: "링크 복사 실패",
+        description: "링크를 복사하는 중 오류가 발생했습니다.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const getBackUrl = useCallback(() => {
+    if (travelPlan?.searchId) {
+      return `/destinations/${travelPlan.searchId}`;
+    }
+    return "/destinations";
+  }, [travelPlan?.searchId]);
+
+  if (isLoading) {
+    return <TravelPlanLoading />
+  }
+
+  if (!travelPlan || !travelPlan.itinerary) {
+    console.warn("[PlanPage] travelPlan or travelPlan.itinerary is null or undefined. travelPlan:", travelPlan);
     return (
       <main className="min-h-screen bg-gradient-to-b from-sky-50 to-white py-8">
         <div className="container mx-auto px-4">
           <div className="mb-8">
-            <Link href="/destinations" className="inline-flex items-center text-sky-600 hover:text-sky-800">
+            <Link href="/" className="inline-flex items-center text-sky-600 hover:text-sky-800">
               <ArrowLeft className="h-4 w-4 mr-1" />
-              트립지니 여행지 목록으로 돌아가기
+              트립지니 홈으로 돌아가기
             </Link>
             <h1 className="text-3xl font-bold mt-4 text-slate-800">여행 계획을 찾을 수 없습니다</h1>
-            <p className="text-slate-600">다시 시도해주세요.</p>
+            <p className="text-slate-600 mt-2">
+              요청하신 여행 계획을 찾을 수 없거나, 계획 내용이 비어있습니다. 올바른 링크인지 확인해주세요.
+            </p>
           </div>
         </div>
       </main>
     )
   }
 
-  const displayPlan = currentItinerary || travelPlan
+  const { destination, startDate, endDate, preferences, itinerary, searchId, imageUrl } = travelPlan;
+  const { country, totalDays, travelType, overview, days } = itinerary;
+  console.log("[PlanPage] Rendering content with searchId:", searchId);
 
   return (
-    <main className="min-h-screen bg-gradient-to-b from-sky-50 to-white py-8">
+    <main className="min-h-screen bg-gradient-to-b from-sky-50 to-white py-8 print:bg-white print:py-0">
       <div className="container mx-auto px-4">
-        <div className="mb-6">
-          <Link href="/destinations" className="inline-flex items-center text-sky-600 hover:text-sky-800">
+        <div className="mb-6 print:hidden">
+          <Link href={getBackUrl()} className="inline-flex items-center text-sky-600 hover:text-sky-800">
             <ArrowLeft className="h-4 w-4 mr-1" />
             트립지니 여행지 목록으로 돌아가기
           </Link>
         </div>
 
-        <div className="relative rounded-xl overflow-hidden h-64 md:h-80 mb-8">
+        <div className="relative rounded-xl overflow-hidden h-64 md:h-80 mb-8 print:hidden">
           <Image
-            src="/placeholder.svg?height=300&width=800"
-            alt={displayPlan.destination}
+            src={imageUrl || "/placeholder.jpg"}
+            alt={destination}
             fill
             className="object-cover"
+            onError={(e) => { 
+              console.error('[PlanPage] Main image load error:', e.currentTarget.src); 
+              e.currentTarget.src = '/placeholder.jpg'; 
+            }}
           />
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/30 to-transparent flex flex-col justify-end p-6">
             <div className="flex items-center gap-2 mb-2">
@@ -133,12 +189,12 @@ function TravelPlanContent() {
               </Badge>
             </div>
             <h1 className="text-3xl md:text-4xl font-bold text-white">
-              {displayPlan.destination}, {displayPlan.country}
+              {destination}
             </h1>
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 mt-2 text-white/90">
               <div className="flex items-center">
                 <Calendar className="h-4 w-4 mr-1" />
-                {startDate} - {endDate} ({displayPlan.totalDays}일)
+                {startDate} - {endDate} ({totalDays}일)
               </div>
               <div className="hidden sm:block">•</div>
               <div>{travelType} 여행</div>
@@ -146,49 +202,47 @@ function TravelPlanContent() {
           </div>
         </div>
 
-        {displayPlan.overview && (
-          <Card className="mb-8 bg-white/80 backdrop-blur-sm border-white/50">
-            <CardContent className="p-6">
+        <div className="hidden print:block mb-8">
+          <h1 className="text-3xl font-bold text-slate-800">
+            {destination}
+          </h1>
+          <div className="flex items-center gap-4 mt-2 text-slate-600">
+            <div className="flex items-center">
+              {startDate} - {endDate} ({totalDays}일)
+            </div>
+            <div>•</div>
+            <div>{travelType} 여행</div>
+          </div>
+        </div>
+
+        {overview && (
+          <Card className="mb-8 bg-white/80 backdrop-blur-sm border-white/50 print:border-none print:bg-transparent print:p-0">
+            <CardContent className="p-6 print:p-0">
               <h2 className="text-xl font-semibold mb-3 flex items-center">
-                <Sparkles className="h-5 w-5 mr-2 text-sky-500" />
+                <Sparkles className="h-5 w-5 mr-2 text-sky-500 print:hidden" />
                 여행 개요
               </h2>
-              <p className="text-slate-700">{displayPlan.overview}</p>
+              <p className="text-slate-700">{overview}</p>
             </CardContent>
           </Card>
         )}
 
-        <div className="flex flex-wrap gap-2 mb-8">
-          <Button variant="outline" size="sm" className="gap-1">
-            <Download className="h-4 w-4" />
-            PDF 저장
-          </Button>
-          <Button variant="outline" size="sm" className="gap-1">
+        <div className="flex flex-wrap gap-2 mb-8 print:hidden">
+          <Button variant="outline" size="sm" className="gap-1" onClick={handlePrint}>
             <Printer className="h-4 w-4" />
             인쇄하기
           </Button>
-          <Button variant="outline" size="sm" className="gap-1">
+          <Button variant="outline" size="sm" className="gap-1" onClick={handleShare}>
             <Share2 className="h-4 w-4" />
-            공유하기
+            공유하기 (링크 복사)
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-8">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-8 print:block">
           <div>
-            <Tabs defaultValue="day1">
-              <TabsList
-                className="mb-4 w-full grid"
-                style={{ gridTemplateColumns: `repeat(${displayPlan.days.length}, 1fr)` }}
-              >
-                {displayPlan.days.map((day: any) => (
-                  <TabsTrigger key={day.day} value={`day${day.day}`}>
-                    Day {day.day}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-
-              {displayPlan.days.map((day: any) => (
-                <TabsContent key={day.day} value={`day${day.day}`} className="space-y-6">
+            <div className="hidden print:block space-y-8">
+              {days && days.map((day: any) => (
+                <div key={day.day} className="space-y-6">
                   <div>
                     <h2 className="text-2xl font-semibold text-slate-800">{day.title}</h2>
                     <p className="text-slate-600">
@@ -197,9 +251,9 @@ function TravelPlanContent() {
                   </div>
 
                   <div className="space-y-6">
-                    {day.activities.map((activity: any, index: number) => (
-                      <Card key={index} className="bg-white/80 backdrop-blur-sm border-white/50">
-                        <CardContent className="p-5">
+                    {day.activities && day.activities.map((activity: any, index: number) => (
+                      <Card key={index} className="bg-white/80 backdrop-blur-sm border-white/50 print:border-none print:bg-transparent print:shadow-none">
+                        <CardContent className="p-5 print:p-0 print:py-2">
                           <div className="flex flex-col sm:flex-row sm:items-start gap-3">
                             <div className="font-semibold text-sky-600 min-w-[60px]">{activity.time}</div>
                             <div className="flex-1">
@@ -210,7 +264,7 @@ function TravelPlanContent() {
                                 <div className="text-sm text-green-600 mt-1">💰 {activity.estimatedCost}</div>
                               )}
                               {activity.tips && (
-                                <div className="text-sm text-amber-600 mt-2 bg-amber-50 p-2 rounded">
+                                <div className="text-sm text-amber-600 mt-2 bg-amber-50 p-2 rounded print:bg-transparent print:p-0 print:mt-1">
                                   💡 {activity.tips}
                                 </div>
                               )}
@@ -220,12 +274,65 @@ function TravelPlanContent() {
                       </Card>
                     ))}
                   </div>
-                </TabsContent>
+                </div>
               ))}
-            </Tabs>
+            </div>
+
+            <div className="print:hidden">
+              <Tabs defaultValue={days && days.length > 0 ? `day${days[0].day}` : undefined}>
+                {days && days.length > 0 && (
+                  <TabsList
+                    className="mb-4 w-full grid"
+                    style={{ gridTemplateColumns: `repeat(${days.length}, 1fr)` }}
+                  >
+                    {days.map((day: any) => (
+                      <TabsTrigger key={day.day} value={`day${day.day}`}>
+                        Day {day.day}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                )}
+
+                {days && days.map((day: any) => (
+                  <TabsContent key={day.day} value={`day${day.day}`} className="space-y-6">
+                    <div>
+                      <h2 className="text-2xl font-semibold text-slate-800">{day.title}</h2>
+                      <p className="text-slate-600">
+                        Day {day.day} - {day.date}
+                      </p>
+                    </div>
+
+                    <div className="space-y-6">
+                      {day.activities && day.activities.map((activity: any, index: number) => (
+                        <Card key={index} className="bg-white/80 backdrop-blur-sm border-white/50">
+                          <CardContent className="p-5">
+                            <div className="flex flex-col sm:flex-row sm:items-start gap-3">
+                              <div className="font-semibold text-sky-600 min-w-[60px]">{activity.time}</div>
+                              <div className="flex-1">
+                                <h3 className="font-semibold text-lg">{activity.title}</h3>
+                                <p className="text-slate-600 mt-1">{activity.description}</p>
+                                <div className="text-sm text-slate-500 mt-1">📍 {activity.location}</div>
+                                {activity.estimatedCost && (
+                                  <div className="text-sm text-green-600 mt-1">💰 {activity.estimatedCost}</div>
+                                )}
+                                {activity.tips && (
+                                  <div className="text-sm text-amber-600 mt-2 bg-amber-50 p-2 rounded">
+                                    💡 {activity.tips}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </TabsContent>
+                ))}
+              </Tabs>
+            </div>
           </div>
 
-          <div>
+          <div className="print:hidden">
             <Card className="bg-white/80 backdrop-blur-sm border-white/50 sticky top-4">
               <CardHeader>
                 <CardTitle className="flex items-center">
@@ -274,18 +381,7 @@ function TravelPlanContent() {
 
 export default function TravelPlanPage() {
   return (
-    <Suspense
-      fallback={
-        <main className="min-h-screen bg-gradient-to-b from-sky-50 to-white py-8">
-          <div className="container mx-auto px-4 flex items-center justify-center">
-            <div className="text-center">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-sky-500" />
-              <p className="text-slate-600">여행 계획을 불러오는 중...</p>
-            </div>
-          </div>
-        </main>
-      }
-    >
+    <Suspense fallback={<TravelPlanLoading />}>
       <TravelPlanContent />
     </Suspense>
   )

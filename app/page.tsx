@@ -3,16 +3,19 @@
 import type React from "react"
 
 import Image from "next/image"
-import { Search, TrendingUp, Loader2 } from "lucide-react"
+import { Search, TrendingUp, Loader2, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DatePickerWithRange } from "@/components/date-range-picker"
 import { TravelTypeSelector } from "@/components/travel-type-selector"
-import { PopularDestinations } from "@/components/popular-destinations"
-import { searchDestinations } from "@/app/actions/travel"
+import { searchDestinations, getRecentTravelPlans } from "@/app/actions/travel"
 import { useState, useTransition, useEffect } from "react"
 import { format } from "date-fns"
 import { useToast } from "@/hooks/use-toast"
+import { TravelPlanUI } from "@/lib/supabase"
+import Link from "next/link"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 
 export default function Home() {
   const [isPending, startTransition] = useTransition()
@@ -22,6 +25,8 @@ export default function Home() {
     travelType: "",
     interests: "",
   })
+  const [recentPlans, setRecentPlans] = useState<TravelPlanUI[]>([])
+  const [isLoadingRecent, setIsLoadingRecent] = useState(true)
 
   // 초기 날짜 설정
   useEffect(() => {
@@ -32,6 +37,21 @@ export default function Home() {
       startDate: format(today, "yyyy-MM-dd"),
       endDate: format(nextWeek, "yyyy-MM-dd"),
     }))
+
+    // 최근 여행 계획 로드
+    const loadRecentPlans = async () => {
+      setIsLoadingRecent(true)
+      try {
+        const plans = await getRecentTravelPlans(3) // 최근 3개 로드
+        setRecentPlans(plans)
+      } catch (error) {
+        console.error("Error fetching recent plans:", error)
+        // 사용자에게 에러 토스트를 보여줄 수 있습니다.
+      } finally {
+        setIsLoadingRecent(false)
+      }
+    }
+    loadRecentPlans()
   }, [])
   const { toast } = useToast()
 
@@ -144,14 +164,56 @@ export default function Home() {
         </form>
       </div>
 
-      {/* Popular Destinations */}
+      {/* Recent Travel Plans */}
       <div className="w-full max-w-4xl mt-16 px-4 mb-20">
         <div className="flex items-center gap-2 mb-4">
-          <TrendingUp className="h-5 w-5 text-sky-500" />
-          <h2 className="text-xl font-semibold text-slate-800">실시간 인기 여행지</h2>
+          <Clock className="h-5 w-5 text-sky-500" />
+          <h2 className="text-xl font-semibold text-slate-800">최근 찾은 여행지</h2>
         </div>
         <div className="backdrop-blur-md bg-white/50 rounded-xl p-6 border border-white/30">
-          <PopularDestinations />
+          {isLoadingRecent ? (
+            <div className="text-center text-slate-500">
+              <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+              최근 여행지를 불러오는 중...
+            </div>
+          ) : recentPlans.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {recentPlans.map((plan) => (
+                <Link key={plan.id} href={`/plan/${plan.id}`} className="block group">
+                  <Card className="overflow-hidden hover:shadow-lg transition-all duration-300 bg-white/90 backdrop-blur-sm border-white/50">
+                    <div className="relative h-40">
+                      <Image
+                        src={plan.imageUrl || "/placeholder.jpg"}
+                        alt={plan.destination}
+                        fill
+                        className="object-cover transition-transform duration-300 group-hover:scale-105"
+                        onError={(e) => { e.currentTarget.src = '/placeholder.jpg'; }}
+                      />
+                    </div>
+                    <CardContent className="p-4">
+                      <h3 className="text-lg font-semibold text-slate-800 truncate group-hover:text-sky-600">
+                        {plan.destination}
+                      </h3>
+                      <p className="text-sm text-slate-500">
+                        {plan.startDate} - {plan.endDate}
+                      </p>
+                      {plan.preferences && plan.preferences.length > 0 && (
+                        <div className="mt-2 flex flex-wrap gap-1">
+                          {plan.preferences.slice(0, 2).map((pref) => (
+                            <Badge key={pref} variant="secondary" className="text-xs bg-sky-100 text-sky-700">
+                              {pref}
+                            </Badge>
+                          ))}
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="text-center text-slate-500">최근 찾은 여행지가 없습니다.</p>
+          )}
         </div>
       </div>
     </main>

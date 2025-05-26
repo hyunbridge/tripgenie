@@ -1,44 +1,44 @@
 "use client"
 
-import { Suspense } from "react"
 import Image from "next/image"
 import Link from "next/link"
-import { ArrowLeft, MapPin, Star, Loader2, Sparkles } from "lucide-react"
+import { ArrowLeft, MapPin, Star, Sparkles } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { useSearchParams } from "next/navigation"
 import { createItinerary } from "@/app/actions/travel"
 import { useState, useTransition } from "react"
 import { useToast } from "@/hooks/use-toast"
+import { SearchResultUI } from "@/lib/supabase"
+import { useRouter } from "next/navigation"
+import PlanLoadingSkeleton from "@/app/plan/[id]/loading"
 
-function DestinationsContent() {
-  const searchParams = useSearchParams()
+export default function DestinationsContent({ searchResult }: { searchResult: SearchResultUI }) {
   const [isPending, startTransition] = useTransition()
   const [loadingDestination, setLoadingDestination] = useState<string | null>(null)
   const { toast } = useToast()
-
-  const startDate = searchParams.get("startDate") || ""
-  const endDate = searchParams.get("endDate") || ""
-  const travelType = searchParams.get("travelType") || ""
-  const interests = searchParams.get("interests") || ""
-  const resultsParam = searchParams.get("results")
-
-  let destinations = []
-  try {
-    if (resultsParam) {
-      const results = JSON.parse(resultsParam)
-      destinations = results.destinations || []
-    }
-  } catch (error) {
-    console.error("Error parsing results:", error)
-  }
+  const router = useRouter()
 
   const handleSelectDestination = async (destination: any) => {
     setLoadingDestination(destination.id)
     startTransition(async () => {
       try {
-        await createItinerary(destination.city, destination.country, startDate, endDate, travelType, interests)
+        const result = await createItinerary(
+          destination.city,
+          destination.country,
+          searchResult.startDate,
+          searchResult.endDate,
+          searchResult.travelType,
+          searchResult.interests.join(', '),
+          destination.imageUrl,
+          searchResult.id
+        )
+        
+        if (result.success && result.planId) {
+          router.push(`/plan/${result.planId}`)
+        } else {
+          throw new Error(result.error || "여행 계획 생성에 실패했습니다.")
+        }
       } catch (error) {
         toast({
           title: "오류 발생",
@@ -50,7 +50,11 @@ function DestinationsContent() {
     })
   }
 
-  if (destinations.length === 0) {
+  if (loadingDestination) {
+    return <PlanLoadingSkeleton />
+  }
+
+  if (!searchResult || !searchResult.results?.destinations) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-sky-50 to-white py-8">
         <div className="container mx-auto px-4">
@@ -60,7 +64,7 @@ function DestinationsContent() {
               메인으로 돌아가기
             </Link>
             <h1 className="text-3xl font-bold mt-4 text-slate-800">여행지를 찾을 수 없습니다</h1>
-            <p className="text-slate-600">검색 조건을 다시 확인해주세요.</p>
+            <p className="text-slate-600">검색 ID ({searchResult?.id}) 에 해당하는 여행지 정보를 찾을 수 없거나, 데이터가 없습니다. 다시 시도해주세요.</p>
           </div>
         </div>
       </main>
@@ -80,19 +84,19 @@ function DestinationsContent() {
             <h1 className="text-3xl font-bold text-slate-800">AI 추천 여행지</h1>
           </div>
           <p className="text-slate-600">
-            {travelType} 여행으로 {interests}을(를) 즐길 수 있는 여행지를 찾았습니다.
+            {searchResult.travelType} 여행으로 {searchResult.interests.join(', ')}을(를) 즐길 수 있는 여행지를 찾았습니다.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {destinations.map((destination: any) => (
+          {searchResult.results.destinations.map((destination: any) => (
             <Card
               key={destination.id}
               className="overflow-hidden group hover:shadow-lg transition-all duration-300 bg-white/90 backdrop-blur-sm border-white/50"
             >
               <div className="relative h-48">
                 <Image
-                  src="/placeholder.svg?height=200&width=350"
+                  src={destination.imageUrl || "/placeholder.svg?height=200&width=350"}
                   alt={destination.city}
                   fill
                   className="object-cover transition-transform duration-300 group-hover:scale-105"
@@ -139,17 +143,10 @@ function DestinationsContent() {
 
                 <Button
                   className="w-full bg-gradient-to-r from-sky-500 to-cyan-500 hover:from-sky-600 hover:to-cyan-600 disabled:opacity-50"
-                  disabled={isPending}
+                  disabled={isPending || loadingDestination !== null}
                   onClick={() => handleSelectDestination(destination)}
                 >
-                  {loadingDestination === destination.id ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      AI가 계획을 짜고 있어요...
-                    </>
-                  ) : (
-                    "여기로 떠날게요"
-                  )}
+                  여기로 떠날게요
                 </Button>
               </CardContent>
             </Card>
@@ -158,23 +155,4 @@ function DestinationsContent() {
       </div>
     </main>
   )
-}
-
-export default function DestinationsPage() {
-  return (
-    <Suspense
-      fallback={
-        <main className="min-h-screen bg-gradient-to-b from-sky-50 to-white py-8">
-          <div className="container mx-auto px-4 flex items-center justify-center">
-            <div className="text-center">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-sky-500" />
-              <p className="text-slate-600">여행지를 불러오는 중...</p>
-            </div>
-          </div>
-        </main>
-      }
-    >
-      <DestinationsContent />
-    </Suspense>
-  )
-}
+} 
