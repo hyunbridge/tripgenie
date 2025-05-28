@@ -3,7 +3,7 @@
 import type React from "react"
 
 import Image from "next/image"
-import { Search, TrendingUp, Loader2, Clock } from "lucide-react"
+import { Search, Loader2, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { DatePickerWithRange } from "@/components/date-range-picker"
@@ -105,14 +105,15 @@ export default function Home() {
       </div>
 
       {/* Main Search Form */}
-      <div className="w-full max-w-3xl mt-10 px-4">
+      <div className="w-full max-w-4xl mt-10 px-4">
         <form onSubmit={handleSubmit}>
           <div className="backdrop-blur-md bg-white/70 rounded-2xl shadow-lg p-6 border border-white/50">
             <div className="space-y-6">
               <div className="flex flex-col md:flex-row gap-4">
                 <div className="flex-1">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">여행 일정</label>
                   <DatePickerWithRange
+                    startDate={formData.startDate}
+                    endDate={formData.endDate}
                     onDateChange={(startDate, endDate) => {
                       setFormData((prev) => ({
                         ...prev,

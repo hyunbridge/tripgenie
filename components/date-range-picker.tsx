@@ -1,96 +1,149 @@
 "use client"
 
 import * as React from "react"
-import { format } from "date-fns"
-import { ko } from "date-fns/locale"
-import { CalendarIcon } from "lucide-react"
-import type { DateRange } from "react-day-picker"
-
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Input } from "@/components/ui/input"
+import { PlaneTakeoff, PlaneLanding } from "lucide-react"
+import { format, isValid } from "date-fns"
 
-interface DatePickerWithRangeProps extends React.HTMLAttributes<HTMLDivElement> {
+interface DatePickerWithRangeProps {
+  startDate?: string
+  endDate?: string
   onDateChange?: (startDate: string | null, endDate: string | null) => void
+  className?: string
 }
 
-export function DatePickerWithRange({ className, onDateChange }: DatePickerWithRangeProps) {
-  const [date, setDate] = React.useState<DateRange | undefined>({
-    from: new Date(),
-    to: new Date(new Date().setDate(new Date().getDate() + 7)),
-  })
-
-  // 이전 날짜 값을 저장하는 ref
-  const prevDatesRef = React.useRef<{
-    fromDate: string | null;
-    toDate: string | null;
-  }>({
-    fromDate: null,
-    toDate: null
-  });
-
-  // PopoverTrigger를 위한 참조 생성
-  const popoverTriggerRef = React.useRef<HTMLButtonElement>(null);
+export function DatePickerWithRange({ 
+  startDate = "", 
+  endDate = "", 
+  onDateChange,
+  className 
+}: DatePickerWithRangeProps) {
+  const [startInputValue, setStartInputValue] = React.useState("")
+  const [endInputValue, setEndInputValue] = React.useState("")
 
   React.useEffect(() => {
-    if (date?.from && date?.to && onDateChange) {
-      const fromDate = format(date.from, "yyyy-MM-dd");
-      const toDate = format(date.to, "yyyy-MM-dd");
+    if (startDate) {
+      const date = new Date(startDate)
+      setStartInputValue(`${date.getFullYear()}년 ${String(date.getMonth() + 1).padStart(2, '0')}월 ${String(date.getDate()).padStart(2, '0')}일`)
+    }
+    if (endDate) {
+      const date = new Date(endDate)
+      setEndInputValue(`${date.getFullYear()}년 ${String(date.getMonth() + 1).padStart(2, '0')}월 ${String(date.getDate()).padStart(2, '0')}일`)
+    }
+  }, [startDate, endDate])
 
-      // 값이 변경된 경우에만 콜백 호출
-      if (fromDate !== prevDatesRef.current.fromDate ||
-          toDate !== prevDatesRef.current.toDate) {
-
-        // 현재 값 저장
-        prevDatesRef.current.fromDate = fromDate;
-        prevDatesRef.current.toDate = toDate;
-
-        onDateChange(fromDate, toDate);
+  const formatValue = (numbers: string) => {
+    if (numbers.length === 0) return ""
+    let result = numbers.slice(0, 4)
+    if (numbers.length >= 4) {
+      result += "년 " + numbers.slice(4, 6)
+      if (numbers.length >= 6) {
+        result += "월 " + numbers.slice(6, 8) + "일"
       }
     }
-  }, [date?.from, date?.to, onDateChange]);
+    return result
+  }
+
+  const handleStartChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    const numbers = value.replace(/\D/g, '').slice(0, 8)
+    setStartInputValue(formatValue(numbers))
+    
+    if (numbers.length === 8) {
+      const year = numbers.slice(0, 4)
+      const month = numbers.slice(4, 6)
+      const day = numbers.slice(6, 8)
+      const dateStr = `${year}-${month}-${day}`
+      const date = new Date(dateStr)
+      
+      if (isValid(date)) {
+        onDateChange?.(format(date, 'yyyy-MM-dd'), endDate || null)
+      }
+    } else if (numbers.length === 0) {
+      onDateChange?.(null, endDate || null)
+    }
+  }
+
+  const handleEndChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value
+    const numbers = value.replace(/\D/g, '').slice(0, 8)
+    setEndInputValue(formatValue(numbers))
+    
+    if (numbers.length === 8) {
+      const year = numbers.slice(0, 4)
+      const month = numbers.slice(4, 6)
+      const day = numbers.slice(6, 8)
+      const dateStr = `${year}-${month}-${day}`
+      const date = new Date(dateStr)
+      
+      if (isValid(date)) {
+        onDateChange?.(startDate || null, format(date, 'yyyy-MM-dd'))
+      }
+    } else if (numbers.length === 0) {
+      onDateChange?.(startDate || null, null)
+    }
+  }
+
+  const handleKeyDown = (isStart: boolean) => (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace') {
+      e.preventDefault()
+      const currentValue = isStart ? startInputValue : endInputValue
+      const numbers = currentValue.replace(/\D/g, '')
+      const newNumbers = numbers.slice(0, -1)
+      if (isStart) {
+        setStartInputValue(formatValue(newNumbers))
+        if (newNumbers.length === 0) {
+          onDateChange?.(null, endDate || null)
+        }
+      } else {
+        setEndInputValue(formatValue(newNumbers))
+        if (newNumbers.length === 0) {
+          onDateChange?.(startDate || null, null)
+        }
+      }
+    }
+  }
 
   return (
-    <div className={cn("grid gap-2", className)}>
-      <Popover>
-        <PopoverTrigger asChild>
-          <Button
-            ref={popoverTriggerRef}
-            id="date"
-            variant={"outline"}
-            className={cn(
-              "w-full justify-start text-left font-normal bg-white/80 border-slate-200",
-              !date && "text-muted-foreground",
-            )}
-          >
-            <CalendarIcon className="mr-2 h-4 w-4" />
-            {date?.from ? (
-              date.to ? (
-                <>
-                  {format(date.from, "PPP", { locale: ko })} - {format(date.to, "PPP", { locale: ko })}
-                </>
-              ) : (
-                format(date.from, "PPP", { locale: ko })
-              )
-            ) : (
-              <span>날짜를 선택하세요</span>
-            )}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <Calendar
-            initialFocus
-            mode="range"
-            defaultMonth={date?.from}
-            selected={date}
-            onSelect={setDate}
-            numberOfMonths={2}
-            locale={ko}
-            disabled={{ before: new Date() }}
-          />
-        </PopoverContent>
-      </Popover>
+    <div className={cn("grid grid-cols-1 md:grid-cols-2 gap-3", className)}>
+      {/* 출발일 */}
+      <div className="relative">
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-slate-700">출발일</label>
+          <div className="relative">
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={startInputValue}
+              onChange={handleStartChange}
+              onKeyDown={handleKeyDown(true)}
+              placeholder="YYYYMMDD"
+              className="pl-9"
+            />
+            <PlaneTakeoff className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          </div>
+        </div>
+      </div>
+
+      {/* 도착일 */}
+      <div className="relative">
+        <div className="space-y-1.5">
+          <label className="block text-sm font-medium text-slate-700">도착일</label>
+          <div className="relative">
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={endInputValue}
+              onChange={handleEndChange}
+              onKeyDown={handleKeyDown(false)}
+              placeholder="YYYYMMDD"
+              className="pl-9"
+            />
+            <PlaneLanding className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
