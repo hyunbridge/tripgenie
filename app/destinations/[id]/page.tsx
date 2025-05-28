@@ -4,7 +4,8 @@ import DestinationsContent from "./content"
 import { getSearchResult } from "@/app/actions/travel"
 
 export default async function DestinationsPage({ params }: { params: { id: string } }) {
-  const searchResult = await getSearchResult(params.id)
+  const awaitedParams = await params;
+  const searchResult = await getSearchResult(awaitedParams.id)
 
   return (
     <Suspense fallback={<DestinationsLoading />}>

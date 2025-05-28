@@ -76,12 +76,20 @@ export default function Home() {
         form.append("interests", formData.interests)
 
         await searchDestinations(form)
-      } catch (error) {
-        toast({
-          title: "오류 발생",
-          description: "여행지 검색 중 오류가 발생했습니다. 다시 시도해주세요.",
-          variant: "destructive",
-        })
+      } catch (error: any) {
+        // redirect로 인한 에러는 무시하고, 그 외의 경우에만 토스트 표시
+        if (error && typeof error.message === 'string' && error.message.includes('NEXT_REDIRECT')) {
+          // NEXT_REDIRECT 에러는 정상적인 리다이렉션 과정이므로 무시합니다.
+          // 또는, error.digest === 'NEXT_REDIRECT' (Next.js 버전에 따라 다를 수 있음) 와 같이 확인할 수도 있습니다.
+          console.log("Redirecting, skipping toast...");
+        } else {
+          console.error("Error during searchDestinations transition:", error);
+          toast({
+            title: "오류 발생",
+            description: "여행지 검색 중 오류가 발생했습니다. 다시 시도해주세요.",
+            variant: "destructive",
+          })
+        }
       }
     })
   }
