@@ -12,7 +12,6 @@ import {
   Sparkles,
   Search,
   MessageSquare,
-  ThumbsUp,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -358,14 +357,6 @@ function TravelPlanContent() {
                     </>
                   )}
                 </Button>
-                <Separator />
-                <div className="text-center">
-                  <p className="text-sm text-slate-600 mb-2">이 여행 계획이 마음에 드시나요?</p>
-                  <Button variant="outline" className="gap-1">
-                    <ThumbsUp className="h-4 w-4" />
-                    좋아요
-                  </Button>
-                </div>
               </CardContent>
             </Card>
           </div>
