@@ -51,7 +51,7 @@ jobs:
             docker rm tripgenie || true
             docker run -d \
               --name tripgenie \
-              -p 3000:3000 \
+              -p ${{ secrets.SERVER_PORT }}:3000 \
               -e GOOGLE_GENERATIVE_AI_API_KEY=${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }} \
               -e NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }} \
               -e NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }} \
