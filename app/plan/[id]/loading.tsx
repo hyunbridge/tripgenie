@@ -37,24 +37,33 @@ export default function TravelPlanLoading({ creating }: TravelPlanLoadingProps) 
         {/* AI 생성 중 표시 - 중앙 팝업 (creating이 true일 때만 표시) */}
         {showAiPopup && (
           <div className="fixed inset-0 bg-black/20 backdrop-blur-sm z-50 flex items-center justify-center">
-            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-lg w-full mx-4 space-y-6">
-              <div className="flex items-center justify-center">
-                <div className="relative">
-                  <div className="absolute inset-0 rounded-full bg-sky-100 animate-ping opacity-20"></div>
-                  <div className="relative bg-sky-50 rounded-full p-4">
-                    <Sparkles className="h-8 w-8 text-sky-500 animate-[spin_3s_linear_infinite]" />
+            <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-lg w-full mx-4 space-y-6 relative overflow-hidden">
+              {/* 배경 그라데이션 효과 */}
+              <div className="absolute inset-0 bg-gradient-to-br from-sky-50 via-white to-sky-50 opacity-50"></div>
+              
+              {/* 메인 콘텐츠 */}
+              <div className="relative">
+                <div className="flex items-center justify-center">
+                  <div className="relative">
+                    {/* 별 아이콘 주변의 링 애니메이션 */}
+                    <div className="absolute inset-0 rounded-full bg-sky-200 animate-ping opacity-20"></div>
+                    <div className="absolute inset-0 rounded-full bg-sky-100 animate-pulse"></div>
+                    {/* 빛나는 효과를 위한 그라데이션 배경 */}
+                    <div className="relative bg-gradient-to-br from-sky-100 to-white rounded-full p-4 shadow-lg">
+                      <Sparkles className="h-8 w-8 text-sky-500 animate-[spin_3s_linear_infinite]" />
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="text-center space-y-2">
-                <h2 className="text-2xl font-bold text-slate-800">AI가 여행 계획을 생성하고 있어요</h2>
-                <p className="text-slate-600">
-                  {destination && country && travelType 
-                    ? `${destination}, ${country}에서의 ${travelType} 여행 계획을 만들고 있습니다.`
-                    : "여행 계획을 만들고 있습니다."}
-                  <br />
-                  잠시만 기다려주세요...
-                </p>
+                <div className="text-center space-y-3 mt-6">
+                  <h2 className="text-2xl font-bold text-slate-800">AI가 여행 계획을 생성하고 있어요</h2>
+                  <p className="text-slate-600">
+                    {destination && country && travelType 
+                      ? `${destination}, ${country}에서의 ${travelType} 여행 계획을 만들고 있습니다.`
+                      : "여행 계획을 만들고 있습니다."}
+                    <br />
+                    <span className="text-slate-600">잠시만 기다려주세요...</span>
+                  </p>
+                </div>
               </div>
             </div>
           </div>

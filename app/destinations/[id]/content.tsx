@@ -51,7 +51,7 @@ export default function DestinationsContent({ searchResult }: { searchResult: Se
   }
 
   if (loadingDestination) {
-    return <PlanLoadingSkeleton />
+    return <PlanLoadingSkeleton creating={true} />
   }
 
   if (!searchResult || !searchResult.results?.destinations) {
